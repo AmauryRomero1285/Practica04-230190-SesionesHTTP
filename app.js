@@ -149,13 +149,22 @@ app.post("/status", (req, res) => {
 
 // Endpoint para listar sesiones activas
 app.get("/currentSessions", (req, res) => {
-  if (!req.session.user) {
+  const { sessionId } = req.query;
+
+  // Verificar la sesión local
+  if (!req.session.user || req.session.user.sessionId !== sessionId) {
     return res.status(404).json({ message: "No hay sesiones activas" });
   }
 
+  const lastAccessedAtFormatted = moment
+    .tz(req.session.user.lastAccessedAt, "America/Mexico_City")
+    .format("YYYY-MM-DD HH:mm:ss");
+  const inactivityTime = calculateSessionInactivity(req.session.user.lastAccessedAt);
+
   res.status(200).json({
-    message: "Sesiones activas",
+    message: "Sesión activa",
     session: req.session.user,
+    lastAccessedAt: lastAccessedAtFormatted,
+    inactivityTime,
   });
 });
-
