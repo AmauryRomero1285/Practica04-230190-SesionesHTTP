@@ -1,5 +1,6 @@
 import express from "express";
 import session from "express-session";
+import morgan from 'morgan';
 import bodyParser from "body-parser";
 import moment from "moment-timezone";
 import { v4 as uuidv4 } from "uuid";
@@ -7,14 +8,13 @@ import cors from "cors";
 import os from "os";
 
 const app = express();
-const PORT = 3000;
+const activeSessions={};
 
 // Configuración del servidor
-app.listen(PORT, () => {
-  console.log(`Servidor ejecutándose en http://localhost:${PORT}`);
-});
-
+app.set('port',process.env.PORT||3000);
 app.use(express.json());
+app.use(cors());
+app.use(morgan('dev'));
 app.use(bodyParser.urlencoded({ extended: true }));
 
 // Middleware para sesiones
@@ -48,6 +48,17 @@ const calculateSessionInactivity = (lastAccessedAt) => {
   const duration = moment.duration(now.diff(lastAccessed));
   return `${duration.hours()} horas, ${duration.minutes()} minutos, ${duration.seconds()} segundos`;
 };
+// Cerrar sesiones inactivas después de 2 minutos
+setInterval(() => {
+  const now = new Date();
+  Object.keys(activeSessions).forEach((sessionId) => {
+    const session = activeSessions[sessionId];
+    const inactivityTime = (now - new Date(session.lastAccessedAt)) / 1000 / 60;
+    if (inactivityTime >= 2) {
+      delete activeSessions[sessionId];
+    }
+  });
+}, 60000); 
 
 // Endpoint de bienvenida
 app.get("/", (req, res) => {
@@ -70,7 +81,7 @@ app.post("/login", (req, res) => {
   const sessionId = uuidv4();
   const now = new Date();
 
-  req.session.user = {
+  const sessionData = {
     sessionId,
     email,
     nickname,
@@ -80,10 +91,10 @@ app.post("/login", (req, res) => {
     lastAccessedAt: now,
   };
 
-  res.status(200).json({
-    message: "Inicio de sesión exitoso.",
-    sessionId,
-  });
+  req.session.user = sessionData;
+  activeSessions[sessionId] = sessionData;
+
+  res.status(200).json({ message: "Inicio de sesión exitoso", sessionId });
 });
 
 // Endpoint para cerrar sesión
@@ -99,7 +110,7 @@ app.post("/logout", (req, res) => {
       .status(404)
       .json({ message: "No se ha encontrado una sesión activa" });
   }
-
+delete activeSessions[sessionId];
   req.session.destroy((err) => {
     if (err) {
       return res.status(500).send("Error al cerrar sesión");
@@ -116,32 +127,32 @@ app.put("/update", (req, res) => {
     return res.status(404).json({ message: "No existe una sesión activa" });
   }
 
-  if (email) req.session.user.email = email;
-  if (nickname) req.session.user.nickname = nickname;
+  if (email) activeSessions[sessionId].email = email;
+  if (nickname) activeSessions[sessionId].nickname = nickname;
 
-  req.session.user.lastAccessedAt = new Date();
+  activeSessions[sessionId].lastAccessedAt = new Date();
 
   res.status(200).json({
     message: "Actualización exitosa",
-    session: req.session.user,
+    session: activeSessions[sessionId],
   });
 });
 
 // Endpoint de estado de la sesión
 app.post("/status", (req, res) => {
   const { sessionId } = req.body;
-  if (!req.session.user || req.session.user.sessionId !== sessionId) {
-    return res.status(404).json({ message: "No hay sesiones activas" });
+  if (!sessionId || !activeSessions[sessionId]) {
+    return res.status(404).json({ message: "No hay sesión activa" });
   }
-  const lastAccessedAtFormatted = moment
-    .tz(req.session.user.lastAccessedAt, "America/Mexico_City")
-    .format("YYYY-MM-DD HH:mm:ss");
-  const inactivityTime = calculateSessionInactivity(req.session.user.lastAccessedAt);
 
-  // Respuesta con la información de la sesión y el tiempo de inactividad
+  const lastAccessedAtFormatted = moment
+    .tz(activeSessions[sessionId].lastAccessedAt, "America/Mexico_City")
+    .format("YYYY-MM-DD HH:mm:ss");
+  const inactivityTime = calculateSessionInactivity(activeSessions[sessionId].lastAccessedAt);
+
   res.status(200).json({
     message: "Sesión activa",
-    session: req.session.user,
+    session: activeSessions[sessionId],
     lastAccessedAt: lastAccessedAtFormatted,
     inactivityTime,
   });
@@ -149,22 +160,22 @@ app.post("/status", (req, res) => {
 
 // Endpoint para listar sesiones activas
 app.get("/currentSessions", (req, res) => {
-  const { sessionId } = req.query;
-
-  // Verificar la sesión local
-  if (!req.session.user || req.session.user.sessionId !== sessionId) {
-    return res.status(404).json({ message: "No hay sesiones activas" });
-  }
-
-  const lastAccessedAtFormatted = moment
-    .tz(req.session.user.lastAccessedAt, "America/Mexico_City")
-    .format("YYYY-MM-DD HH:mm:ss");
-  const inactivityTime = calculateSessionInactivity(req.session.user.lastAccessedAt);
+  const sessions = Object.values(activeSessions).map(session => ({
+    sessionId: session.sessionId,
+    email: session.email,
+    nickname: session.nickname,
+    macAddress: session.macAddress,
+    ip: session.ip,
+    createdAt: moment(session.createdAt).format("YYYY-MM-DD HH:mm:ss"),
+    lastAccessedAt: moment(session.lastAccessedAt,"America/Mexico_city").format("YYYY-MM-DD HH:mm:ss"),
+    inactivityTime: calculateSessionInactivity(session.lastAccessedAt),
+  }));
 
   res.status(200).json({
-    message: "Sesión activa",
-    session: req.session.user,
-    lastAccessedAt: lastAccessedAtFormatted,
-    inactivityTime,
+    message: "Sesiones activas en la LAN",
+    totalSessions: sessions.length,
+    sessions,
   });
 });
+
+export default app;
