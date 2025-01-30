@@ -16,6 +16,7 @@ app.use(express.json());
 app.use(cors());
 app.use(morgan('dev'));
 app.use(bodyParser.urlencoded({ extended: true }));
+app.set('trust proxy',1);
 
 // Middleware para sesiones
 app.use(
@@ -28,17 +29,8 @@ app.use(
 );
 
 // Función para obtener la IP local
-const getLocalIP = () => {
-  const networkInterfaces = os.networkInterfaces();
-  for (const interfaceName in networkInterfaces) {
-    const interfaces = networkInterfaces[interfaceName];
-    for (const iface of interfaces) {
-      if (iface.family === "IPv4" && !iface.internal) {
-        return iface.address;
-      }
-    }
-  }
-  return null; // Retorna cuando no se encuentra una IP válida
+const getClientIP = (req) => {
+  return req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0] : req.ip;
 };
 
 // Función para calcular tiempo de inactividad
@@ -86,7 +78,7 @@ app.post("/login", (req, res) => {
     email,
     nickname,
     macAddress,
-    ip: getLocalIP(),
+    ip: getClientIP(req),
     createdAt: now,
     lastAccessedAt: now,
   };
