@@ -28,10 +28,39 @@ app.use(
   })
 );
 
+
 // Función para obtener la IP local
-const getClientIP = (req) => {
-  return req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0] : req.ip;
+const getLocalIP = () => {
+  const networkInterfaces = os.networkInterfaces();
+  for (const interfaceName in networkInterfaces) {
+    const interfaces = networkInterfaces[interfaceName];
+    for (const iface of interfaces) {
+      if (iface.family === "IPv4" && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return null; 
 };
+// Función para obtener la IP 
+const getClientIP = (req) => {
+  let ip =
+    req.headers["x-forwarded-for"]?.split(",")[0] ||
+    req.connection?.remoteAddress ||
+    req.socket?.remoteAddress || 
+    req.ip;
+
+  if (ip === "::1" || ip === "0.0.0.0") {
+    ip = getLocalIP();
+  }
+  if (ip.includes("::ffff:")) {
+    ip = ip.split("::ffff:")[1];
+  }
+
+  return ip;
+};
+
+
 
 // Función para calcular tiempo de inactividad
 const calculateSessionInactivity = (lastAccessedAt) => {
