@@ -1,0 +1,27 @@
+{
+  "name": "mx.edu.utxj.ti.awoi4.practica04",
+  "version": "1.0.0",
+  "description": "Realizar un ejemplo de aplicación web basada en el TechStack de NodeJS, Express que permite controlar las Sesiones y registros de datos en las variables de version.",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "server": " nodemon index.js"
+  },
+  "author": "Yared Amaury Romero Martinez",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.7.9",
+    "body-parser": "^1.20.3",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "express-session": "^1.18.1",
+    "moment-timezone": "^0.5.46",
+    "mongoose": "^8.9.5",
+    "morgan": "^1.10.0",
+    "uuid": "^11.0.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}
